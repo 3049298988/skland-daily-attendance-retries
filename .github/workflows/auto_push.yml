@@ -1,36 +1,94 @@
-name: 自动push防止Actions自动停止
+name: 删除空提交
 
 on:
   schedule:
-    - cron: '0 0 1,15 * *'
-  workflow_dispatch:
+    - cron: '0 0 1,15 * *'  # 每月1日和15日的午夜（UTC时间）触发
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
-  build:
+  remove-empty-commits:
     runs-on: ubuntu-latest
-    if: github.event.repository.owner.id == github.event.sender.id || ! github.event.sender.id || github.actor == 'Google'
 
     steps:
-      - name: Getting the repo
+      - name: 检出仓库
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 获取完整的提交历史
 
-      - name: Re setting the url for `origin`
+      - name: 删除空提交
+        run: |
+          # 获取当前分支名称
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "当前分支: $BRANCH"
+
+          # 查找空提交（0 files changed）
+          echo "正在查找空提交..."
+          EMPTY_COMMITS=$(git log --pretty=format:'%H' --name-only | awk '
+            /^[0-9a-f]{40}$/ {
+              if (commit && !has_changes) {
+                print commit
+              }
+              commit=$0
+              has_changes=0
+              next
+            }
+            /.+/ {
+              has_changes=1
+            }
+            /^$/ {
+              if (commit && !has_changes) {
+                print commit
+              }
+              commit=""
+              has_changes=0
+            }
+          ')
+
+          if [ -z "$EMPTY_COMMITS" ]; then
+            echo "未找到空提交。"
+            exit 0
+          fi
+
+          # 输出找到的空提交
+          echo "找到的空提交:"
+          echo "$EMPTY_COMMITS"
+
+          # 输出每个空提交的详细信息
+          echo "空提交的详细信息:"
+          for COMMIT in $EMPTY_COMMITS; do
+            echo "提交哈希: $COMMIT"
+            git show --stat --oneline $COMMIT
+            echo "-----------------------------"
+          done
+
+          # 删除空提交
+          echo "正在删除空提交..."
+          git filter-branch --force --prune-empty --tag-name-filter cat -- $BRANCH
+
+          # 输出删除后的提交历史
+          echo "删除空提交后的提交历史:"
+          git log --oneline -n 10  # 显示最近的 10 条提交历史
+
+          # 强制推送更新后的分支
+          echo "正在强制推送更新后的分支..."
+          git push origin --force $BRANCH
+          echo "空提交已删除，分支已更新。"
+
+      - name: 重新设置 `origin` 的 URL
         run: |
           git remote set-url origin https://${{ github.repository_owner }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
 
-      - name: Adding git info
+      - name: 配置 Git 用户信息
         run: |
           git config --global user.name "Google"
           git config --global user.email "opensource@google.com"
 
-      - name: Creating an empty commit
+      - name: 创建一个空提交
         run: |
-          git commit --allow-empty -m "Auto amazing commit"
+          git commit --allow-empty -m "自动创建的空提交"
 
-      - name: Finilly pushing the repo
+      - name: 推送仓库
         run: |
-          git push origin ${{ github.ref_name }}
-
-      - name: 文件来自 https://github.com/MayoBlueSky/My-Actions/blob/master/.github/workflows/auto_push.yml 非常感谢
-        run: |
-          echo "文件来自 https://github.com/MayoBlueSky/My-Actions/blob/master/.github/workflows/auto_push.yml 非常感谢"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "当前分支: $BRANCH"
+          git push origin $BRANCH
