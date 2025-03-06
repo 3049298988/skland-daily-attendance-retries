@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event.repository.owner.id == github.event.sender.id || ! github.event.sender.id || github.actor == 'Google'
 
     steps:
       - name: Getting the repo
@@ -20,8 +19,8 @@ jobs:
 
       - name: Adding git info
         run: |
-          git config --global user.name "Google"
-          git config --global user.email "opensource@google.com"
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
 
       - name: Creating an empty commit
         run: |
