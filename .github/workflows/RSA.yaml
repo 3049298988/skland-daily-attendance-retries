@@ -1,0 +1,32 @@
+name: 🔐 RSA 安全读取密钥
+on: 
+  workflow_dispatch:
+
+jobs:
+  secure-reveal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 使用 RSA 公钥加密 Secret
+        env:
+          # 你的 RSA 公钥，建议也存在 GitHub Secret 里，或者直接写死在下面
+          PUBLIC_KEY: ${{ secrets.RSA }} 
+          TARGET_DATA: ${{ secrets.SKLAND_TOKENS }}
+        run: |
+          if [ -z "$TARGET_DATA" ]; then
+            echo "错误: SKLAND_TOKENS 为空"
+            exit 1
+          fi
+          
+          # 1. 将公钥字符串保存为临时文件
+          echo "$PUBLIC_KEY" > public_key.pub
+          
+          # 2. 使用 openssl 进行加密
+          # -pubin 表示输入的是公钥
+          # -rsautl 在较新版本 openssl 中可能需要使用 pkeyutl
+          echo -n "$TARGET_DATA" | openssl pkeyutl -encrypt -pubin -inkey public_key.pub > encrypted.bin
+          
+          # 3. 输出 Base64 编码后的结果
+          echo "请复制下方的加密字符串到 Termux 解密："
+          echo "------------------------------------------------"
+          base64 -w 0 encrypted.bin
+          echo -e "\n------------------------------------------------"
